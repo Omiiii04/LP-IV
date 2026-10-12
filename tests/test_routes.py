@@ -21,6 +21,7 @@ def test_evidence_uploads_use_unique_storage_names_and_preserve_original(client,
     client.post("/cases", data={"title": "Incident", "investigator": "Analyst", "csrf_token": token})
     with app.app_context():
         from models import Case
+        from extensions import db
         case_id = Case.query.one().id
     for content in (b"one", b"two"):
         response = client.post(f"/cases/{case_id}/evidence", data={"file": (io.BytesIO(content), "same.txt"), "csrf_token": token}, content_type="multipart/form-data")
@@ -49,3 +50,54 @@ def test_evidence_download_uses_registered_record(client, app):
     assert response.data == b"proof"
     assert "proof.txt" in response.headers["Content-Disposition"]
     assert client.get("/evidence/999/download").status_code == 404
+
+
+def test_evidence_download_rejects_tampering_and_logs_failure(client, app):
+    import io
+    import re
+    token = re.search(r'name="csrf_token" type="hidden" value="([^"]+)', client.get("/cases/new").data.decode()).group(1)
+    client.post("/cases", data={"title": "Incident", "investigator": "Analyst", "csrf_token": token})
+    with app.app_context():
+        from models import Case, Evidence
+        case_id = Case.query.one().id
+    client.post(f"/cases/{case_id}/evidence", data={"file": (io.BytesIO(b"proof"), "proof.txt"), "csrf_token": token}, content_type="multipart/form-data")
+    with app.app_context():
+        item = Evidence.query.one()
+        with open(item.source, "wb") as stream:
+            stream.write(b"tampered")
+        evidence_id = item.id
+    response = client.get(f"/evidence/{evidence_id}/download")
+    assert response.status_code == 409
+    with app.app_context():
+        from models import Activity
+        assert Activity.query.filter_by(action_type="evidence_integrity_failure").count() == 1
+
+
+def test_upload_database_failure_removes_new_file(client, app, monkeypatch):
+    import io
+    import re
+    token = re.search(r'name="csrf_token" type="hidden" value="([^"]+)', client.get("/cases/new").data.decode()).group(1)
+    client.post("/cases", data={"title": "Incident", "investigator": "Analyst", "csrf_token": token})
+    with app.app_context():
+        from models import Case
+        from extensions import db
+        case_id = Case.query.one().id
+        def fail_commit():
+            raise RuntimeError("database unavailable")
+        monkeypatch.setattr(db.session, "commit", fail_commit)
+    response = client.post(f"/cases/{case_id}/evidence", data={"file": (io.BytesIO(b"proof"), "proof.txt"), "csrf_token": token}, content_type="multipart/form-data")
+    assert response.status_code == 500
+    assert not [path for path in __import__('pathlib').Path(app.config["STORAGE_ROOT"]).rglob("*") if path.is_file()]
+
+
+def test_evidence_upload_rejects_empty_and_disallowed_files(client, app):
+    import io
+    import re
+    token = re.search(r'name="csrf_token" type="hidden" value="([^"]+)', client.get("/cases/new").data.decode()).group(1)
+    client.post("/cases", data={"title": "Incident", "investigator": "Analyst", "csrf_token": token})
+    with app.app_context():
+        from models import Case
+        case_id = Case.query.one().id
+    for content, name in ((b"", "empty.txt"), (b"x", "secret.exe")):
+        response = client.post(f"/cases/{case_id}/evidence", data={"file": (io.BytesIO(content), name), "csrf_token": token}, content_type="multipart/form-data")
+        assert response.status_code == 400

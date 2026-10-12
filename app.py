@@ -7,12 +7,13 @@ from flask_wtf import FlaskForm
 from wtforms import StringField, TextAreaField
 from wtforms.validators import DataRequired
 from werkzeug.utils import secure_filename
+from werkzeug.exceptions import HTTPException
 
 from config import Config
 from extensions import csrf, db
-from models import Activity, Case, Evidence, LogAnalysis, Report
+from models import Activity, Case, Evidence, LogAnalysis, Report, DiskImage
 from services.file_analyzer import copy_evidence, metadata
-from services.hashing import sha256_file
+from services.hashing import sha256_file, hashes_match
 from services.log_analyzer import analyze_log
 from services.report_generator import csv_bytes, pdf_bytes, report_data
 from services.disk_image_analyzer import examine
@@ -37,7 +38,25 @@ def create_app(test_config=None):
 
     def upload_target(folder, original_name):
         suffix = Path(original_name).suffix.lower()
-        return Path(app.config["STORAGE_ROOT"]) / folder / f"{uuid4().hex}{suffix}"
+        root = Path(app.config["STORAGE_ROOT"]).resolve()
+        target = (root / folder / f"{uuid4().hex}{suffix}").resolve()
+        target.relative_to(root)
+        return target
+
+    def save_upload(uploaded, folder, allowed):
+        filename = secure_filename(uploaded.filename or "")
+        if not filename or Path(filename).suffix.lower() not in allowed:
+            abort(400, "invalid or unsupported file type")
+        target = upload_target(folder, filename)
+        try:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            uploaded.save(target)
+            if target.stat().st_size == 0:
+                raise ValueError("empty uploads are not accepted")
+            return filename, target
+        except Exception:
+            target.unlink(missing_ok=True)
+            raise
 
     def record_report(case_id):
         db.session.add(Report(case_id=case_id))
@@ -82,16 +101,23 @@ def create_app(test_config=None):
         uploaded = request.files.get("file")
         if not uploaded or not uploaded.filename:
             abort(400, "file is required")
-        filename = secure_filename(uploaded.filename)
-        if not filename:
-            abort(400, "unsafe filename")
-        target = upload_target("uploads", filename)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        uploaded.save(target)
-        info = metadata(target)
-        db.session.add(Evidence(case_id=case.id, description=filename, source=str(target), sha256=info["sha256"], investigator=case.investigator))
-        db.session.add(Activity(case_id=case.id, action_type="evidence_registered", result=filename))
-        db.session.commit()
+        try:
+            filename, target = save_upload(uploaded, "uploads", app.config["ALLOWED_EVIDENCE_EXTENSIONS"])
+            info = metadata(target)
+            db.session.add(Evidence(case_id=case.id, description=filename, source=str(target), sha256=info["sha256"], investigator=case.investigator))
+            db.session.add(Activity(case_id=case.id, action_type="evidence_registered", result=filename))
+            db.session.commit()
+        except ValueError as error:
+            db.session.rollback()
+            abort(400, str(error))
+        except HTTPException:
+            db.session.rollback()
+            raise
+        except Exception:
+            db.session.rollback()
+            if "target" in locals():
+                target.unlink(missing_ok=True)
+            abort(500, "evidence registration failed")
         return redirect(url_for("case_detail", case_id=case.id))
 
     @app.get("/evidence/<int:evidence_id>/download")
@@ -99,6 +125,10 @@ def create_app(test_config=None):
         item = db.session.get(Evidence, evidence_id)
         if item is None or not Path(item.source).is_file():
             abort(404)
+        if not hashes_match(item.source, item.sha256):
+            db.session.add(Activity(case_id=item.case_id, action_type="evidence_integrity_failure", result=item.description))
+            db.session.commit()
+            abort(409, "evidence integrity verification failed")
         db.session.add(Activity(case_id=item.case_id, action_type="evidence_downloaded", result=item.description))
         db.session.commit()
         return send_file(item.source, as_attachment=True, download_name=item.description)
@@ -107,46 +137,73 @@ def create_app(test_config=None):
     def add_log(case_id):
         case = Case.query.get_or_404(case_id)
         uploaded = request.files.get("file")
-        if not uploaded or Path(uploaded.filename or "").suffix.lower() not in {".log", ".txt", ".csv"}:
-            abort(400, "only .log, .txt, and .csv files are accepted")
-        filename = secure_filename(uploaded.filename)
-        target = upload_target("logs", filename)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        uploaded.save(target)
+        if not uploaded:
+            abort(400, "file is required")
+        try:
+            filename, target = save_upload(uploaded, "logs", app.config["ALLOWED_LOG_EXTENSIONS"])
+        except ValueError as error:
+            abort(400, str(error))
         result = analyze_log(target)
         db.session.add(LogAnalysis(case_id=case.id, filename=filename, events_processed=result["events_processed"], flagged_patterns=result["flagged_patterns"], findings_json=json.dumps(result)))
         db.session.add(Activity(case_id=case.id, action_type="log_analysis", result=json.dumps(result)))
-        db.session.commit()
+        try:
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            target.unlink(missing_ok=True)
+            abort(500, "log registration failed")
         return redirect(url_for("case_detail", case_id=case.id))
 
     @app.get("/reports/<int:case_id>.json")
     def report_json(case_id):
-        data = report_data(case_id)
+        try:
+            data = report_data(case_id)
+        except HTTPException:
+            raise
+        except Exception:
+            abort(500, "report generation failed")
         record_report(case_id)
         return jsonify(data)
 
     @app.get("/reports/<int:case_id>.csv")
     def report_csv(case_id):
-        content = csv_bytes(case_id)
+        try:
+            content = csv_bytes(case_id)
+        except HTTPException:
+            raise
+        except Exception:
+            abort(500, "report generation failed")
         record_report(case_id)
         return Response(content, mimetype="text/csv", headers={"Content-Disposition": f"attachment; filename=case-{case_id}.csv"})
 
     @app.get("/reports/<int:case_id>.pdf")
     def report_pdf(case_id):
-        content = pdf_bytes(case_id)
+        try:
+            content = pdf_bytes(case_id)
+        except HTTPException:
+            raise
+        except Exception:
+            abort(500, "report generation failed")
         record_report(case_id)
         return Response(content, mimetype="application/pdf", headers={"Content-Disposition": f"attachment; filename=case-{case_id}.pdf"})
 
     @app.post("/disk-images")
     def disk_image():
         uploaded = request.files.get("file")
-        if not uploaded or Path(uploaded.filename or "").suffix.lower() not in {".dd", ".img"}:
-            abort(400, "only .dd and .img files are accepted")
-        filename = secure_filename(uploaded.filename)
-        target = upload_target("images", filename)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        uploaded.save(target)
-        return jsonify(examine(target))
+        if not uploaded:
+            abort(400, "file is required")
+        filename, target = save_upload(uploaded, "images", app.config["ALLOWED_DISK_IMAGE_EXTENSIONS"])
+        try:
+            result = examine(target)
+            item = DiskImage(case_id=request.form.get("case_id", type=int), filename=filename, source=str(target),
+                             sha256=result["sha256_before"], analysis_status="hash_only", results_json=json.dumps(result))
+            db.session.add(item)
+            db.session.commit()
+            return jsonify({**result, "id": item.id, "sha256": item.sha256, "analysis_status": item.analysis_status})
+        except Exception:
+            db.session.rollback()
+            target.unlink(missing_ok=True)
+            abort(500, "disk-image registration failed")
 
     @app.errorhandler(404)
     def not_found(error):

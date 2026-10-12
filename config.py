@@ -8,4 +8,7 @@ class Config:
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     MAX_CONTENT_LENGTH = 16 * 1024 * 1024
     STORAGE_ROOT = os.getenv("STORAGE_ROOT", str(Path("instance") / "storage"))
+    ALLOWED_EVIDENCE_EXTENSIONS = {".txt", ".log", ".csv", ".json", ".pdf", ".zip", ".doc", ".docx", ".dd", ".img"}
+    ALLOWED_LOG_EXTENSIONS = {".log", ".txt", ".csv"}
+    ALLOWED_DISK_IMAGE_EXTENSIONS = {".dd", ".img"}
 
