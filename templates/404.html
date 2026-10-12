@@ -1,1 +1,1 @@
-{% extends "base.html" %}{% block content %}<h1>Not found</h1>{% endblock %}
+{% extends "base.html" %}{% block content %}<div class="panel text-center py-5"><div class="eyebrow">404</div><h1>Record not found</h1><p class="muted">The requested investigation resource does not exist.</p><a class="btn btn-primary" href="{{ url_for('dashboard') }}">Return to dashboard</a></div>{% endblock %}

@@ -68,13 +68,35 @@ def create_app(test_config=None):
 
     @app.get("/")
     def dashboard():
+        recent_activity = Activity.query.order_by(Activity.created_at.desc()).limit(8).all()
         return render_template("dashboard.html", counts={"cases": Case.query.count(), "evidence": Evidence.query.count(),
             "logs": LogAnalysis.query.count(), "flagged": sum(x.flagged_patterns for x in LogAnalysis.query), "reports": Report.query.count()},
-            cases=Case.query.order_by(Case.created_at.desc()).all())
+            cases=Case.query.order_by(Case.created_at.desc()).limit(5).all(), recent_activity=recent_activity)
 
     @app.get("/cases")
     def cases():
         return render_template("cases.html", cases=Case.query.order_by(Case.created_at.desc()).all())
+
+    @app.get("/evidence")
+    def evidence_index():
+        items = Evidence.query.order_by(Evidence.collected_at.desc()).all()
+        statuses = {}
+        for item in items:
+            statuses[item.id] = "Integrity failure" if Activity.query.filter_by(case_id=item.case_id, action_type="evidence_integrity_failure", result=item.description).first() else (
+                "Verified on download" if Activity.query.filter_by(case_id=item.case_id, action_type="evidence_downloaded", result=item.description).first() else "Not yet verified")
+        return render_template("evidence.html", items=items, statuses=statuses)
+
+    @app.get("/logs")
+    def logs_index():
+        return render_template("logs.html", analyses=LogAnalysis.query.order_by(LogAnalysis.id.desc()).all())
+
+    @app.get("/disk-images")
+    def disk_images_index():
+        return render_template("disk_images.html", images=DiskImage.query.order_by(DiskImage.created_at.desc()).all(), cases=Case.query.order_by(Case.title).all())
+
+    @app.get("/reports")
+    def reports_index():
+        return render_template("reports.html", cases=Case.query.order_by(Case.title).all())
 
     @app.get("/cases/new")
     def new_case():
@@ -88,12 +110,20 @@ def create_app(test_config=None):
         case = Case(title=form.title.data.strip(), investigator=form.investigator.data.strip(), description=form.description.data or "")
         db.session.add(case)
         db.session.commit()
+        db.session.add(Activity(case_id=case.id, action_type="case_created", result=case.title))
+        db.session.commit()
         flash("Case created.", "success")
         return redirect(url_for("cases"))
 
     @app.get("/cases/<int:case_id>")
     def case_detail(case_id):
-        return render_template("case_detail.html", case=Case.query.get_or_404(case_id))
+        case = Case.query.get_or_404(case_id)
+        analyses = LogAnalysis.query.filter_by(case_id=case.id).order_by(LogAnalysis.id.desc()).all()
+        for analysis in analyses:
+            analysis.findings = json.loads(analysis.findings_json)
+        reports = Report.query.filter_by(case_id=case.id).order_by(Report.generated_at.desc()).all()
+        activities = Activity.query.filter_by(case_id=case.id).order_by(Activity.created_at.desc()).all()
+        return render_template("case_detail.html", case=case, analyses=analyses, reports=reports, activities=activities)
 
     @app.post("/cases/<int:case_id>/evidence")
     def add_evidence(case_id):
@@ -107,6 +137,7 @@ def create_app(test_config=None):
             db.session.add(Evidence(case_id=case.id, description=filename, source=str(target), sha256=info["sha256"], investigator=case.investigator))
             db.session.add(Activity(case_id=case.id, action_type="evidence_registered", result=filename))
             db.session.commit()
+            flash(f"Evidence registered: {filename}", "success")
         except ValueError as error:
             db.session.rollback()
             abort(400, str(error))
@@ -152,6 +183,7 @@ def create_app(test_config=None):
             db.session.rollback()
             target.unlink(missing_ok=True)
             abort(500, "log registration failed")
+        flash(f"Log analyzed: {filename}", "success")
         return redirect(url_for("case_detail", case_id=case.id))
 
     @app.get("/reports/<int:case_id>.json")
@@ -192,12 +224,16 @@ def create_app(test_config=None):
         uploaded = request.files.get("file")
         if not uploaded:
             abort(400, "file is required")
+        case_id = request.form.get("case_id", type=int)
+        if case_id is None or db.session.get(Case, case_id) is None:
+            abort(400, "a valid case is required")
         filename, target = save_upload(uploaded, "images", app.config["ALLOWED_DISK_IMAGE_EXTENSIONS"])
         try:
             result = examine(target)
-            item = DiskImage(case_id=request.form.get("case_id", type=int), filename=filename, source=str(target),
+            item = DiskImage(case_id=case_id, filename=filename, source=str(target),
                              sha256=result["sha256_before"], analysis_status="hash_only", results_json=json.dumps(result))
             db.session.add(item)
+            db.session.add(Activity(case_id=case_id, action_type="disk_image_registered", result=filename))
             db.session.commit()
             return jsonify({**result, "id": item.id, "sha256": item.sha256, "analysis_status": item.analysis_status})
         except Exception:

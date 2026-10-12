@@ -45,6 +45,7 @@ class LogAnalysis(db.Model):
     events_processed = db.Column(db.Integer, nullable=False)
     flagged_patterns = db.Column(db.Integer, nullable=False)
     findings_json = db.Column(db.Text, nullable=False)
+    case = db.relationship("Case", backref=db.backref("log_analyses", lazy=True))
 
 
 class Report(db.Model):

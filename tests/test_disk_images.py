@@ -22,7 +22,11 @@ def test_disk_image_metadata_is_persisted(client, app):
     import io
     import re
     token = re.search(r'name="csrf_token" type="hidden" value="([^"]+)', client.get("/cases/new").data.decode()).group(1)
-    response = client.post("/disk-images", data={"file": (io.BytesIO(b"synthetic image"), "image.dd"), "csrf_token": token}, content_type="multipart/form-data")
+    client.post("/cases", data={"title": "Image review", "investigator": "Analyst", "csrf_token": token})
+    with app.app_context():
+        from models import Case
+        case_id = Case.query.one().id
+    response = client.post("/disk-images", data={"case_id": str(case_id), "file": (io.BytesIO(b"synthetic image"), "image.dd"), "csrf_token": token}, content_type="multipart/form-data")
     assert response.status_code == 200
     with app.app_context():
         from models import DiskImage
