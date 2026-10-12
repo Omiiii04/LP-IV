@@ -14,6 +14,12 @@ def test_case_creation_and_dashboard(client):
     assert b"Laptop review" in client.get("/").data
 
 
+def test_new_case_form_posts_to_case_creation_route(client):
+    response = client.get("/cases/new")
+
+    assert b'action="/cases"' in response.data
+
+
 def test_evidence_uploads_use_unique_storage_names_and_preserve_original(client, app):
     import io
     import re
