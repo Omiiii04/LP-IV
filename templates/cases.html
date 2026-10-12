@@ -1,0 +1,1 @@
+{% extends "base.html" %}{% block content %}<h1>Cases</h1><a class="btn btn-primary mb-3" href="{{ url_for('new_case') }}">New case</a>{% for case in cases %}<div><a href="{{ url_for('case_detail',case_id=case.id) }}">{{ case.title }}</a> — {{ case.status }}</div>{% else %}<p>No cases.</p>{% endfor %}{% endblock %}
