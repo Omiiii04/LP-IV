@@ -14,9 +14,12 @@ class Case(db.Model):
     description = db.Column(db.Text, default="")
     status = db.Column(db.String(30), default="Open", nullable=False)
     created_at = db.Column(db.DateTime, default=utcnow, nullable=False)
+
     evidence = db.relationship("Evidence", backref="case", lazy=True, cascade="all, delete-orphan")
     disk_images = db.relationship("DiskImage", backref="case", lazy=True, cascade="all, delete-orphan")
     activities = db.relationship("Activity", backref="case", lazy=True, cascade="all, delete-orphan")
+    log_analyses = db.relationship("LogAnalysis", backref="case", lazy=True, cascade="all, delete-orphan")
+    reports = db.relationship("Report", backref="case", lazy=True, cascade="all, delete-orphan")
 
 
 class Evidence(db.Model):
@@ -45,7 +48,6 @@ class LogAnalysis(db.Model):
     events_processed = db.Column(db.Integer, nullable=False)
     flagged_patterns = db.Column(db.Integer, nullable=False)
     findings_json = db.Column(db.Text, nullable=False)
-    case = db.relationship("Case", backref=db.backref("log_analyses", lazy=True))
 
 
 class Report(db.Model):

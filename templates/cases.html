@@ -1,1 +1,84 @@
-{% extends "base.html" %}{% block content %}<div class="page-head"><div><div class="eyebrow">Workspace</div><h1 class="mb-1">Cases</h1><p class="muted mb-0">Investigations and their collected artifacts.</p></div><a class="btn btn-primary" href="{{ url_for('new_case') }}">+ New case</a></div><div class="table-wrap"><table class="table"><thead><tr><th>Case</th><th>Investigator</th><th>Status</th><th>Created</th><th></th></tr></thead><tbody>{% for case in cases %}<tr><td><a class="fw-semibold" href="{{ url_for('case_detail',case_id=case.id) }}">{{ case.title }}</a></td><td>{{ case.investigator }}</td><td><span class="badge-status">{{ case.status }}</span></td><td class="muted">{{ case.created_at.strftime('%d %b %Y') }}</td><td><a href="{{ url_for('case_detail',case_id=case.id) }}">Open →</a></td></tr>{% else %}<tr><td colspan="5"><div class="empty">No cases registered yet.</div></td></tr>{% endfor %}</tbody></table></div>{% endblock %}
+{% extends "base.html" %}
+
+{% block content %}
+<div class="top-bar">
+  <div>
+    <div class="eyebrow">Workspace</div>
+    <h1 class="page-title">Cases</h1>
+    <p class="muted mb-0">Investigations and their collected artifacts.</p>
+  </div>
+  <div>
+    <a class="btn btn-primary" href="{{ url_for('new_case') }}">
+      + New case
+    </a>
+  </div>
+</div>
+
+<div class="panel p-3 mb-4 d-flex justify-content-between align-items-center">
+  <div class="d-flex align-items-center gap-2 w-100" style="max-width: 400px;">
+    <input type="text" id="caseSearchInput" class="form-control form-control-sm" placeholder="Filter cases by title or investigator..." oninput="filterCasesTable()">
+  </div>
+  <div class="small text-muted">
+    Total: <span class="fw-bold text-white">{{ cases | length }}</span> case(s)
+  </div>
+</div>
+
+<div class="table-wrap">
+  <table class="table" id="casesTable">
+    <thead>
+      <tr>
+        <th>Case</th>
+        <th>Investigator</th>
+        <th>Status</th>
+        <th>Created</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for case in cases %}
+        <tr class="case-row" data-search="{{ case.title | lower }} {{ case.investigator | lower }}">
+          <td>
+            <a class="fw-semibold text-white fs-6" href="{{ url_for('case_detail', case_id=case.id) }}">
+              {{ case.title }}
+            </a>
+            <div class="small text-muted font-monospace">Case #{{ case.id }} · {{ case.evidence | length }} item(s)</div>
+          </td>
+          <td>
+            <span class="text-slate-300">{{ case.investigator }}</span>
+          </td>
+          <td>
+            <span class="badge-status {% if case.status == 'Closed' %}badge-closed{% elif case.status in ('In Progress', 'Under Review') %}badge-warning{% endif %}">
+              {{ case.status }}
+            </span>
+          </td>
+          <td class="muted small">
+            {{ case.created_at.strftime('%d %b %Y') }}
+          </td>
+          <td class="text-end">
+            <a class="btn btn-outline-light btn-sm-action" href="{{ url_for('case_detail', case_id=case.id) }}">
+              Open →
+            </a>
+          </td>
+        </tr>
+      {% else %}
+        <tr>
+          <td colspan="5">
+            <div class="empty">No cases registered yet.</div>
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<script>
+  function filterCasesTable() {
+    const q = document.getElementById('caseSearchInput').value.toLowerCase();
+    const rows = document.querySelectorAll('.case-row');
+    rows.forEach(r => {
+      const match = r.getAttribute('data-search').includes(q);
+      r.style.display = match ? '' : 'none';
+    });
+  }
+</script>
+{% endblock %}

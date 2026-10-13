@@ -1,1 +1,61 @@
-{% extends "base.html" %}{% block content %}<div class="page-head"><div><div class="eyebrow">Export center</div><h1>Reports</h1><p class="muted mb-0">Generate JSON, CSV, or PDF from the current case records.</p></div></div><div class="table-wrap"><table class="table"><thead><tr><th>Case</th><th>Investigator</th><th>Available exports</th></tr></thead><tbody>{% for case in cases %}<tr><td><a href="{{ url_for('case_detail',case_id=case.id) }}">{{ case.title }}</a></td><td>{{ case.investigator }}</td><td><a class="me-3" href="{{ url_for('report_json',case_id=case.id) }}">JSON</a><a class="me-3" href="{{ url_for('report_csv',case_id=case.id) }}">CSV</a><a href="{{ url_for('report_pdf',case_id=case.id) }}">PDF</a></td></tr>{% else %}<tr><td colspan="3"><div class="empty">Create a case before generating a report.</div></td></tr>{% endfor %}</tbody></table></div>{% endblock %}
+{% extends "base.html" %}
+
+{% block content %}
+<div class="top-bar">
+  <div>
+    <div class="eyebrow">Export Center</div>
+    <h1 class="page-title">Reports</h1>
+    <p class="muted mb-0">Generate JSON, CSV, or PDF from the current case records.</p>
+  </div>
+</div>
+
+<div class="table-wrap">
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Case</th>
+        <th>Investigator</th>
+        <th>Summary</th>
+        <th>Available Exports</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for case in cases %}
+        <tr>
+          <td>
+            <a href="{{ url_for('case_detail', case_id=case.id) }}" class="fw-bold text-white fs-6">
+              {{ case.title }}
+            </a>
+            <div class="small text-muted font-monospace">Case #{{ case.id }} · Opened {{ case.created_at.strftime('%d %b %Y') }}</div>
+          </td>
+          <td>
+            <span class="text-slate-300">{{ case.investigator }}</span>
+          </td>
+          <td class="small text-muted">
+            {{ case.evidence | length }} evidence · {{ case.disk_images | length }} disk images · {{ case.log_analyses | length }} logs
+          </td>
+          <td>
+            <div class="d-inline-flex gap-2">
+              <a class="btn btn-outline-light btn-sm-action" href="{{ url_for('report_json', case_id=case.id) }}" title="Machine-readable JSON manifest">
+                JSON
+              </a>
+              <a class="btn btn-outline-light btn-sm-action" href="{{ url_for('report_csv', case_id=case.id) }}" title="Relational tabular CSV export">
+                CSV
+              </a>
+              <a class="btn btn-primary btn-sm-action" href="{{ url_for('report_pdf', case_id=case.id) }}" title="Printable multi-page forensic PDF report">
+                PDF
+              </a>
+            </div>
+          </td>
+        </tr>
+      {% else %}
+        <tr>
+          <td colspan="4">
+            <div class="empty">Create a case before generating a report.</div>
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

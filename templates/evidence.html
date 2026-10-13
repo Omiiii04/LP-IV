@@ -1,1 +1,94 @@
-{% extends "base.html" %}{% block content %}<div class="page-head"><div><div class="eyebrow">Collection register</div><h1>Evidence</h1><p class="muted mb-0">Recorded filenames and integrity state. Storage paths are intentionally hidden.</p></div></div><div class="table-wrap"><table class="table"><thead><tr><th>Filename</th><th>Case</th><th>SHA-256</th><th>Collected</th><th>Integrity</th><th></th></tr></thead><tbody>{% for item in items %}<tr><td>{{ item.description }}</td><td><a href="{{ url_for('case_detail',case_id=item.case_id) }}">{{ item.case.title }}</a></td><td class="hash">{{ item.sha256 }}</td><td class="muted">{{ item.collected_at.strftime('%d %b %Y') }}</td><td><span class="badge-status">{{ statuses[item.id] }}</span></td><td><a href="{{ url_for('download_evidence',evidence_id=item.id) }}">Verify & download</a></td></tr>{% else %}<tr><td colspan="6"><div class="empty">No evidence has been registered.</div></td></tr>{% endfor %}</tbody></table></div>{% endblock %}
+{% extends "base.html" %}
+
+{% block content %}
+<div class="top-bar">
+  <div>
+    <div class="eyebrow">Collection Register</div>
+    <h1 class="page-title">Evidence</h1>
+    <p class="muted mb-0">Recorded filenames and integrity state. Storage paths are intentionally hidden.</p>
+  </div>
+</div>
+
+<div class="panel p-3 mb-4 d-flex justify-content-between align-items-center">
+  <div class="d-flex align-items-center gap-2 w-100" style="max-width: 400px;">
+    <input type="text" id="evidenceSearchInput" class="form-control form-control-sm" placeholder="Filter evidence by filename or case..." oninput="filterEvidenceTable()">
+  </div>
+  <div class="small text-muted">
+    Total Items: <span class="fw-bold text-white">{{ items | length }}</span>
+  </div>
+</div>
+
+<div class="table-wrap">
+  <table class="table" id="evidenceTable">
+    <thead>
+      <tr>
+        <th>Filename</th>
+        <th>Case</th>
+        <th>SHA-256</th>
+        <th>Collected</th>
+        <th>Integrity</th>
+        <th class="text-end"></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in items %}
+        <tr class="evidence-row" data-search="{{ item.description | lower }} {{ item.case.title | lower }}">
+          <td>
+            <div class="fw-bold text-white">{{ item.description }}</div>
+            <div class="small text-muted font-monospace">Evidence #{{ item.id }} · Registered by {{ item.investigator }}</div>
+          </td>
+          <td>
+            <a href="{{ url_for('case_detail', case_id=item.case_id) }}" class="fw-semibold">
+              {{ item.case.title }}
+            </a>
+          </td>
+          <td>
+            <div class="hash-badge">
+              <span class="hash">{{ item.sha256[:12] }}...{{ item.sha256[-8:] }}</span>
+              <button type="button" class="copy-btn" onclick="copyHash('{{ item.sha256 }}', this)" title="Copy SHA-256">⎘ Copy</button>
+            </div>
+          </td>
+          <td class="muted small">
+            {{ item.collected_at.strftime('%d %b %Y') if item.collected_at else '—' }}
+          </td>
+          <td>
+            <span id="status-badge-{{ item.id }}" class="badge-status {% if 'Verified' in statuses[item.id] %}badge-verified{% elif 'failure' in statuses[item.id] %}badge-danger{% endif %}">
+              {{ statuses[item.id] }}
+            </span>
+          </td>
+          <td class="text-end">
+            <div class="d-inline-flex gap-2">
+              <button type="button" class="btn btn-outline-light btn-sm-action" onclick="verifyEvidenceInPlace({{ item.id }}, '{{ csrf_token() }}', this)" title="In-place verify">
+                Verify
+              </button>
+              <button type="button" class="btn btn-outline-light btn-sm-action" onclick="openPreviewModal({{ item.id }})" title="Preview hex bytes">
+                Preview
+              </button>
+              <a class="btn btn-outline-light btn-sm-action" href="{{ url_for('download_evidence', evidence_id=item.id) }}">
+                Verify & download
+              </a>
+            </div>
+          </td>
+        </tr>
+      {% else %}
+        <tr>
+          <td colspan="6">
+            <div class="empty">No evidence has been registered.</div>
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<script>
+  function filterEvidenceTable() {
+    const q = document.getElementById('evidenceSearchInput').value.toLowerCase();
+    const rows = document.querySelectorAll('.evidence-row');
+    rows.forEach(r => {
+      const match = r.getAttribute('data-search').includes(q);
+      r.style.display = match ? '' : 'none';
+    });
+  }
+</script>
+{% endblock %}

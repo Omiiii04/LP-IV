@@ -1,1 +1,111 @@
-{% extends "base.html" %}{% block content %}<div class="page-head"><div><div class="eyebrow">Investigation overview</div><h1 class="mb-1">Dashboard</h1><p class="muted mb-0">A clear view of your forensic workspace.</p></div><a class="btn btn-primary px-4" href="{{ url_for('new_case') }}">+ Create new case</a></div><div class="row g-3 mb-4">{% for key,label in [('cases','Total cases'),('evidence','Evidence items'),('logs','Log analyses'),('flagged','Flagged patterns'),('reports','Reports generated')] %}<div class="col-6 col-lg"><div class="metric"><strong>{{ counts[key] }}</strong><span>{{ label }}</span></div></div>{% endfor %}</div><div class="row g-4"><div class="col-lg-7"><div class="section-title"><h2 class="h5 mb-0">Recent cases</h2><a href="{{ url_for('cases') }}">View all →</a></div><div class="panel">{% for case in cases %}<div class="d-flex justify-content-between align-items-center py-2 border-bottom" style="border-color:var(--line)!important"><div><a href="{{ url_for('case_detail',case_id=case.id) }}" class="fw-semibold">{{ case.title }}</a><div class="muted small">{{ case.investigator }} · {{ case.created_at.strftime('%d %b %Y') }}</div></div><span class="badge-status">{{ case.status }}</span></div>{% else %}<div class="empty">No investigations yet. Create your first case to begin.</div>{% endfor %}</div></div><div class="col-lg-5"><div class="section-title"><h2 class="h5 mb-0">Recent activity</h2></div><div class="panel">{% for item in recent_activity %}<div class="activity"><div class="fw-semibold">{{ item.action_type|replace('_',' ')|title }}</div><div class="small muted">{{ item.result|truncate(70) }}</div><small>{{ item.created_at.strftime('%d %b %Y, %H:%M') }}</small></div>{% else %}<div class="empty">Activity will appear here as you work.</div>{% endfor %}</div></div></div>{% endblock %}
+{% extends "base.html" %}
+
+{% block content %}
+<div class="top-bar">
+  <div>
+    <div class="eyebrow">Investigation Overview</div>
+    <h1 class="page-title">Dashboard</h1>
+    <p class="muted mb-0">A clear view of your forensic workspace.</p>
+  </div>
+  <div>
+    <a class="btn btn-primary" href="{{ url_for('new_case') }}">
+      + Create new case
+    </a>
+  </div>
+</div>
+
+<!-- KPI Metrics Grid -->
+<div class="row g-3 mb-4">
+  {% for key, label, icon in [
+    ('cases', 'Total cases', '▣'),
+    ('evidence', 'Evidence items', '◇'),
+    ('logs', 'Log analyses', '≡'),
+    ('flagged', 'Flagged patterns', '⚠'),
+    ('reports', 'Reports generated', '↗')
+  ] %}
+    <div class="col-6 col-lg">
+      <div class="metric">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <span>{{ label }}</span>
+          <span style="color: var(--cyan); font-size: 0.9rem;">{{ icon }}</span>
+        </div>
+        <strong>{{ counts[key] }}</strong>
+      </div>
+    </div>
+  {% endfor %}
+</div>
+
+<!-- Main Split: Recent Cases & Recent Activity -->
+<div class="row g-4">
+  <div class="col-lg-7">
+    <div class="panel h-100">
+      <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom" style="border-color: var(--border)!important;">
+        <h2 class="h5 mb-0 text-white font-monospace">Recent Cases</h2>
+        <a href="{{ url_for('cases') }}" class="small">View all cases →</a>
+      </div>
+
+      {% if cases %}
+        <div class="d-flex flex-column gap-2">
+          {% for case in cases %}
+            <div class="card-dark d-flex justify-content-between align-items-center">
+              <div>
+                <a href="{{ url_for('case_detail', case_id=case.id) }}" class="fw-bold text-white fs-6">
+                  {{ case.title }}
+                </a>
+                <div class="muted small mt-1">
+                  Lead: <span class="text-slate-300">{{ case.investigator }}</span> · Created: {{ case.created_at.strftime('%d %b %Y') }}
+                </div>
+              </div>
+              <div class="d-flex align-items-center gap-3">
+                <span class="badge-status {% if case.status == 'Closed' %}badge-closed{% elif case.status in ('In Progress', 'Under Review') %}badge-warning{% endif %}">
+                  {{ case.status }}
+                </span>
+                <a href="{{ url_for('case_detail', case_id=case.id) }}" class="btn btn-outline-light btn-sm-action">
+                  Open →
+                </a>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="empty">
+          <div class="fs-4 mb-2">📂</div>
+          No investigations yet. Create your first case to begin.
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="col-lg-5">
+    <div class="panel h-100">
+      <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom" style="border-color: var(--border)!important;">
+        <h2 class="h5 mb-0 text-white font-monospace">Recent Activity</h2>
+        <span class="small text-muted">Audit stream</span>
+      </div>
+
+      {% if recent_activity %}
+        <div class="activity-feed">
+          {% for item in recent_activity %}
+            <div class="activity-item {% if 'failure' in item.action_type %}act-danger{% elif 'flagged' in item.action_type %}act-warn{% endif %}">
+              <div class="fw-semibold text-white small">
+                {{ item.action_type | replace('_', ' ') | title }}
+              </div>
+              <div class="text-muted small my-1 font-monospace" style="word-break: break-all;">
+                {{ item.result | truncate(80) }}
+              </div>
+              <small class="text-dim" style="font-size: 0.72rem;">
+                {{ item.created_at.strftime('%d %b %Y, %H:%M UTC') }}
+              </small>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="empty">
+          <div class="fs-4 mb-2">⏱</div>
+          Activity will appear here as you work.
+        </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

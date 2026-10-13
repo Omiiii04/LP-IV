@@ -1,1 +1,85 @@
-{% extends "base.html" %}{% block content %}<div class="page-head"><div><div class="eyebrow">Analysis register</div><h1>Log Analysis</h1><p class="muted mb-0">Patterns are investigative leads, not proof of malicious activity.</p></div></div><div class="table-wrap"><table class="table"><thead><tr><th>File</th><th>Case</th><th>Events</th><th>Flagged patterns</th><th></th></tr></thead><tbody>{% for item in analyses %}<tr><td>{{ item.filename }}</td><td><a href="{{ url_for('case_detail',case_id=item.case_id) }}">{{ item.case.title }}</a></td><td>{{ item.events_processed }}</td><td>{{ item.flagged_patterns }}</td><td><a href="{{ url_for('case_detail',case_id=item.case_id) }}">Open case →</a></td></tr>{% else %}<tr><td colspan="5"><div class="empty">No log analyses have been performed.</div></td></tr>{% endfor %}</tbody></table></div>{% endblock %}
+{% extends "base.html" %}
+
+{% block content %}
+<div class="top-bar">
+  <div>
+    <div class="eyebrow">Analysis Register</div>
+    <h1 class="page-title">Log Analysis</h1>
+    <p class="muted mb-0">Patterns are investigative leads, not proof of malicious activity.</p>
+  </div>
+</div>
+
+<div class="panel p-3 mb-4 d-flex justify-content-between align-items-center">
+  <div class="d-flex align-items-center gap-2 w-100" style="max-width: 400px;">
+    <input type="text" id="logSearchInput" class="form-control form-control-sm" placeholder="Filter log analyses by filename or case..." oninput="filterLogsTable()">
+  </div>
+  <div class="small text-muted">
+    Total Analyses: <span class="fw-bold text-white">{{ analyses | length }}</span>
+  </div>
+</div>
+
+<div class="table-wrap">
+  <table class="table" id="logsTable">
+    <thead>
+      <tr>
+        <th>File</th>
+        <th>Case</th>
+        <th>Events</th>
+        <th>Flagged Patterns</th>
+        <th class="text-end"></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in analyses %}
+        <tr class="log-row" data-search="{{ item.filename | lower }} {{ item.case.title | lower }}">
+          <td>
+            <div class="fw-bold text-white">{{ item.filename }}</div>
+            <div class="small text-muted font-monospace">Analysis Record #{{ item.id }}</div>
+          </td>
+          <td>
+            <a href="{{ url_for('case_detail', case_id=item.case_id) }}" class="fw-semibold">
+              {{ item.case.title }}
+            </a>
+          </td>
+          <td class="font-mono text-slate-300">
+            {{ item.events_processed }}
+          </td>
+          <td>
+            {% if item.flagged_patterns > 0 %}
+              <span class="badge-status badge-warning">
+                ⚠ {{ item.flagged_patterns }} flagged
+              </span>
+            {% else %}
+              <span class="badge-status badge-verified">
+                ✓ 0 flagged
+              </span>
+            {% endif %}
+          </td>
+          <td class="text-end">
+            <a class="btn btn-outline-light btn-sm-action" href="{{ url_for('case_detail', case_id=item.case_id) }}">
+              Open case →
+            </a>
+          </td>
+        </tr>
+      {% else %}
+        <tr>
+          <td colspan="5">
+            <div class="empty">No log analyses have been performed.</div>
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<script>
+  function filterLogsTable() {
+    const q = document.getElementById('logSearchInput').value.toLowerCase();
+    const rows = document.querySelectorAll('.log-row');
+    rows.forEach(r => {
+      const match = r.getAttribute('data-search').includes(q);
+      r.style.display = match ? '' : 'none';
+    });
+  }
+</script>
+{% endblock %}

@@ -1,1 +1,46 @@
-{% extends "base.html" %}{% block content %}<div class="page-head"><div><div class="eyebrow">New investigation</div><h1>Register a case</h1></div></div><div class="panel" style="max-width:760px"><form method="post" action="{{ url_for('create_case') }}">{{ form.hidden_tag() }}<div class="mb-3">{{ form.title.label(class="form-label") }}{{ form.title(class="form-control",placeholder="e.g. Workstation incident") }}{% for error in form.title.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}</div><div class="mb-3">{{ form.investigator.label(class="form-label") }}{{ form.investigator(class="form-control",placeholder="Lead investigator") }}{% for error in form.investigator.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}</div><div class="mb-4">{{ form.description.label(class="form-label") }}{{ form.description(class="form-control",rows=5,placeholder="Scope, context, or collection notes") }}</div><button class="btn btn-primary px-4">Create case</button><a class="btn btn-outline-light ms-2" href="{{ url_for('cases') }}">Cancel</a></form></div>{% endblock %}
+{% extends "base.html" %}
+
+{% block content %}
+<div class="top-bar">
+  <div>
+    <div class="eyebrow">New Investigation</div>
+    <h1 class="page-title">Register a case</h1>
+    <p class="muted mb-0">Initialize an investigative workspace with chain of custody tracking.</p>
+  </div>
+</div>
+
+<div class="panel" style="max-width: 760px;">
+  <form method="post" action="{{ url_for('create_case') }}">
+    {{ form.hidden_tag() }}
+
+    <div class="mb-3">
+      {{ form.title.label(class="form-label") }}
+      {{ form.title(class="form-control", placeholder="e.g. Workstation Incident - Endpoint compromise") }}
+      {% for error in form.title.errors %}
+        <div class="text-danger small mt-1">⚠ {{ error }}</div>
+      {% endfor %}
+      <div class="form-text small muted">Give the investigation a clear, recognizable title.</div>
+    </div>
+
+    <div class="mb-3">
+      {{ form.investigator.label(class="form-label") }}
+      {{ form.investigator(class="form-control", placeholder="Lead Investigator or Badge / Staff ID") }}
+      {% for error in form.investigator.errors %}
+        <div class="text-danger small mt-1">⚠ {{ error }}</div>
+      {% endfor %}
+      <div class="form-text small muted">Investigator responsible for chain of custody and analysis.</div>
+    </div>
+
+    <div class="mb-4">
+      {{ form.description.label(class="form-label") }}
+      {{ form.description(class="form-control", rows=5, placeholder="Scope, physical evidence notes, incident context, or authorization details...") }}
+      <div class="form-text small muted">Contextual summary of the scope and initial leads.</div>
+    </div>
+
+    <div class="d-flex align-items-center gap-3">
+      <button class="btn btn-primary px-4">Create case</button>
+      <a class="btn btn-outline-light" href="{{ url_for('cases') }}">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

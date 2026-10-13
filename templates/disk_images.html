@@ -1,1 +1,96 @@
-{% extends "base.html" %}{% block content %}<div class="page-head"><div><div class="eyebrow">Read-only processing</div><h1>Disk Images</h1><p class="muted mb-0">Images are stored with a recorded SHA-256. Analysis is hash-only.</p></div></div><div class="panel mb-4"><form class="row g-3 align-items-end" method="post" enctype="multipart/form-data" action="{{ url_for('disk_image') }}">{{ csrf_token() }}<div class="col-md-4"><label class="form-label">Case</label><select class="form-select" name="case_id" required><option value="">Choose a case</option>{% for case in cases %}<option value="{{ case.id }}">{{ case.title }}</option>{% endfor %}</select></div><div class="col-md-5"><label class="form-label">Image file (.dd or .img)</label><input class="form-control" type="file" name="file" accept=".dd,.img" required></div><div class="col-md-3"><button class="btn btn-primary w-100">Register image</button></div></form></div><div class="table-wrap"><table class="table"><thead><tr><th>Image</th><th>Case</th><th>SHA-256</th><th>Status</th></tr></thead><tbody>{% for image in images %}<tr><td>{{ image.filename }}</td><td>{% if image.case %}<a href="{{ url_for('case_detail',case_id=image.case_id) }}">{{ image.case.title }}</a>{% else %}—{% endif %}</td><td class="hash">{{ image.sha256 }}</td><td><span class="badge-status">Hash-only</span></td></tr>{% else %}<tr><td colspan="4"><div class="empty">No disk images registered.</div></td></tr>{% endfor %}</tbody></table></div>{% endblock %}
+{% extends "base.html" %}
+
+{% block content %}
+<div class="top-bar">
+  <div>
+    <div class="eyebrow">Read-only Processing</div>
+    <h1 class="page-title">Disk Images</h1>
+    <p class="muted mb-0">Images are stored with a recorded SHA-256. Analysis performs native MBR/GPT partition inspection.</p>
+  </div>
+</div>
+
+<div class="panel mb-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h2 class="h5 mb-0 text-white font-monospace">Register Forensic Disk Image</h2>
+    <span class="small text-muted">Supports raw disk dumps (.dd, .img)</span>
+  </div>
+
+  <form class="row g-3 align-items-end" method="post" enctype="multipart/form-data" action="{{ url_for('disk_image') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="format" value="html">
+
+    <div class="col-md-4">
+      <label class="form-label">Associate with Case</label>
+      <select class="form-select" name="case_id" required>
+        <option value="">Choose a case</option>
+        {% for case in cases %}
+          <option value="{{ case.id }}">{{ case.title }} (Lead: {{ case.investigator }})</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="col-md-5">
+      <label class="form-label">Raw Image File (.dd or .img)</label>
+      <input class="form-control" type="file" name="file" accept=".dd,.img" required>
+    </div>
+
+    <div class="col-md-3">
+      <button class="btn btn-primary w-100">Register image</button>
+    </div>
+  </form>
+</div>
+
+<div class="table-wrap">
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Image</th>
+        <th>Case</th>
+        <th>SHA-256</th>
+        <th>Partition Scheme</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for image in images %}
+        <tr>
+          <td>
+            <div class="fw-bold text-white">{{ image.filename }}</div>
+            <div class="small text-muted font-monospace">Record #{{ image.id }} · Registered {{ image.created_at.strftime('%d %b %Y') if image.created_at else '' }}</div>
+          </td>
+          <td>
+            {% if image.case %}
+              <a href="{{ url_for('case_detail', case_id=image.case_id) }}" class="fw-semibold">
+                {{ image.case.title }}
+              </a>
+            {% else %}
+              —
+            {% endif %}
+          </td>
+          <td>
+            <div class="hash-badge">
+              <span class="hash">{{ image.sha256[:12] }}...{{ image.sha256[-8:] }}</span>
+              <button type="button" class="copy-btn" onclick="copyHash('{{ image.sha256 }}', this)">⎘ Copy</button>
+            </div>
+          </td>
+          <td class="small">
+            <span class="text-cyan font-mono">{{ image.results.scheme if image.results else 'Raw dump' }}</span>
+            {% if image.results and image.results.partitions %}
+              <span class="text-muted small">({{ image.results.partitions | length }} parts)</span>
+            {% endif %}
+          </td>
+          <td>
+            <span class="badge-status">Hash-only</span>
+          </td>
+        </tr>
+      {% else %}
+        <tr>
+          <td colspan="5">
+            <div class="empty">No disk images registered.</div>
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
